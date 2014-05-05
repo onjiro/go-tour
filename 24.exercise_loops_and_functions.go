@@ -7,9 +7,10 @@ import (
 
 func Sqrt(x float64) float64 {
 	// Newton 法を利用した近似解の導出
-	// 固定10回
+	// 差が小さくなるまでぶん回す
 	v := 1.0
-	for i := 0; i < 10; i++ {
+	for p := 0.0; math.Abs(v-p) > 0.001; {
+		p = v
 		v = v - (math.Pow(v, 2)-x)/2*v
 	}
 	return v
