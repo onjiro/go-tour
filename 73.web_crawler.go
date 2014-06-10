@@ -10,25 +10,57 @@ type Fetcher interface {
 	Fetch(url string) (body string, urls []string, err error)
 }
 
+type FoundUrl struct {
+	Url   string
+	Depth int
+}
+
 // Crawl uses fetcher to recursively crawl
 // pages starting with url, to a maximum of depth.
 func Crawl(url string, depth int, fetcher Fetcher) {
-	// TODO: Fetch URLs in parallel.
-	// TODO: Don't fetch the same URL twice.
-	// This implementation doesn't do either:
-	if depth <= 0 {
-		return
+	semapho := 0
+	m := make(map[string]bool)
+	foundUrlChannel := make(chan *FoundUrl)
+	crawlFinishedUrlChannel := make(chan string)
+
+	var f func(url string, depth int, Fetcher Fetcher)
+	f = func(url string, depth int, Fetcher Fetcher) {
+		if depth <= 0 {
+			crawlFinishedUrlChannel <- url
+			return
+		}
+		body, urls, err := fetcher.Fetch(url)
+		if err != nil {
+			fmt.Println(err)
+			crawlFinishedUrlChannel <- url
+			return
+		}
+		fmt.Printf("found: %s %q\n", url, body)
+		for _, u := range urls {
+			foundUrlChannel <- &FoundUrl{u, depth - 1}
+		}
+		crawlFinishedUrlChannel <- url
 	}
-	body, urls, err := fetcher.Fetch(url)
-	if err != nil {
-		fmt.Println(err)
-		return
+
+	semapho++
+	go f(url, depth, fetcher)
+	for {
+		select {
+		case u := <-foundUrlChannel:
+			_, exists := m[u.Url]
+			if !exists {
+				semapho++
+				m[u.Url] = false
+				go f(u.Url, u.Depth, fetcher)
+			}
+		case <-crawlFinishedUrlChannel:
+			semapho--
+		default:
+			if semapho == 0 {
+				return
+			}
+		}
 	}
-	fmt.Printf("found: %s %q\n", url, body)
-	for _, u := range urls {
-		Crawl(u, depth-1, fetcher)
-	}
-	return
 }
 
 func main() {
