@@ -37,12 +37,9 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 		fmt.Printf("found: %s %q\n", url, body)
 	}
 
-	semapho := 0
 	m := make(map[string]bool)
-
-	m[url] = true
-	go f(url, depth, fetcher)
-	semapho++
+	c <- CrawlResult{"", depth + 1, []string{url}}
+	semapho := 1
 
 	for {
 		select {
