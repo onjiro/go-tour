@@ -39,21 +39,24 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 
 	m := make(map[string]bool)
 	c <- CrawlResult{"", depth + 1, []string{url}}
-	semapho := 1
 
 	for {
 		select {
 		case result := <-c:
-			semapho--
+			m[result.Url] = true
 			for _, found := range result.FoundUrls {
-				if !m[found] {
-					semapho++
-					m[found] = true
+				_, exists := m[found]
+				if !exists {
+					m[found] = false
 					go f(found, result.Depth-1, fetcher)
 				}
 			}
 		default:
-			if semapho == 0 {
+			allFinished := true
+			for _, finished := range m {
+				allFinished = allFinished && finished
+			}
+			if allFinished {
 				return
 			}
 		}
