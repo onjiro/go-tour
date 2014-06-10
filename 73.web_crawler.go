@@ -25,21 +25,20 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 
 	var f func(url string, depth int, Fetcher Fetcher)
 	f = func(url string, depth int, Fetcher Fetcher) {
+		defer func() { crawlFinishedUrlChannel <- url }()
+
 		if depth <= 0 {
-			crawlFinishedUrlChannel <- url
 			return
 		}
 		body, urls, err := fetcher.Fetch(url)
 		if err != nil {
 			fmt.Println(err)
-			crawlFinishedUrlChannel <- url
 			return
 		}
 		fmt.Printf("found: %s %q\n", url, body)
 		for _, u := range urls {
 			foundUrlChannel <- &FoundUrl{u, depth - 1}
 		}
-		crawlFinishedUrlChannel <- url
 	}
 
 	semapho++
