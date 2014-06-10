@@ -10,22 +10,21 @@ type Fetcher interface {
 	Fetch(url string) (body string, urls []string, err error)
 }
 
-type FoundUrl struct {
-	Url   string
-	Depth int
+type CrawlResult struct {
+	Url       string
+	Depth     int
+	FoundUrls []string
 }
 
 // Crawl uses fetcher to recursively crawl
 // pages starting with url, to a maximum of depth.
 func Crawl(url string, depth int, fetcher Fetcher) {
-	semapho := 0
-	m := make(map[string]bool)
-	foundUrlChannel := make(chan *FoundUrl)
-	crawlFinishedUrlChannel := make(chan string)
+	c := make(chan CrawlResult, 10)
 
 	var f func(url string, depth int, Fetcher Fetcher)
 	f = func(url string, depth int, Fetcher Fetcher) {
-		defer func() { crawlFinishedUrlChannel <- url }()
+		urls := []string{}
+		defer func() { c <- CrawlResult{url, depth, urls} }()
 
 		if depth <= 0 {
 			return
@@ -36,24 +35,24 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 			return
 		}
 		fmt.Printf("found: %s %q\n", url, body)
-		for _, u := range urls {
-			foundUrlChannel <- &FoundUrl{u, depth - 1}
-		}
 	}
 
-	semapho++
+	semapho := 0
 	go f(url, depth, fetcher)
+	semapho++
+
+	m := make(map[string]bool)
 	for {
 		select {
-		case u := <-foundUrlChannel:
-			_, exists := m[u.Url]
-			if !exists {
-				semapho++
-				m[u.Url] = false
-				go f(u.Url, u.Depth, fetcher)
-			}
-		case <-crawlFinishedUrlChannel:
+		case result := <-c:
 			semapho--
+			for _, found := range result.FoundUrls {
+				if !m[found] {
+					semapho++
+					m[found] = true
+					go f(found, result.Depth-1, fetcher)
+				}
+			}
 		default:
 			if semapho == 0 {
 				return
