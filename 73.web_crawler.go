@@ -38,10 +38,12 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 	}
 
 	semapho := 0
+	m := make(map[string]bool)
+
+	m[url] = true
 	go f(url, depth, fetcher)
 	semapho++
 
-	m := make(map[string]bool)
 	for {
 		select {
 		case result := <-c:
